@@ -6,7 +6,7 @@ on:
     branches:
       - main
 jobs:
-  build-images:
+  build-images-api:
     name: docker build
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -50,7 +50,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/web_application/web_application.Dockerfile
+          file: ./docker/api/api.Dockerfile
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           tags: ghcr.io/${{ env.REPOSITORY }}/api
           labels: ${{ steps.meta.outputs.labels }}
@@ -68,6 +68,46 @@ jobs:
           path: ${{ runner.temp }}/digests-api-${{ github.repository_id }}/*
           if-no-files-found: error
           retention-days: 1
+
+
+  build-images-web_application:
+    name: docker build
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        arch: ["amd64", "arm64"]
+        include:
+          - runner: ubuntu-latest
+            arch: "amd64"
+          - runner: ubuntu-24.04-arm
+            arch: "arm64"
+    steps:
+      - name: downcase REPOSITORY
+        run: |
+          echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "API: Docker meta"
+        id: meta_api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REPOSITORY }}/api
+          flavor:
+            latest=false
 
       - name: "WEB_APPLICATON: Docker meta"
         id: meta
@@ -101,12 +141,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish-image:
+
+  publish-image-api:
     runs-on: ubuntu-latest
     permissions:
       packages: write
     needs:
-      - build-images
+      - build-images-api
     steps:
       - name: downcase REPOSITORY
         run: |
@@ -137,6 +178,24 @@ jobs:
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf 'ghcr.io/${{ env.REPOSITORY }}/api@sha256:%s ' *)
+
+  publish-image-web_application:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    needs:
+      - build-images-web_application
+    steps:
+      - name: downcase REPOSITORY
+        run: |
+          echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "WEB_APPLICATON: Download digests"
         uses: actions/download-artifact@v4
