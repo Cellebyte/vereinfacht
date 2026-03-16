@@ -7,7 +7,7 @@ on:
       - main
 jobs:
   build-images-api:
-    name: docker build
+    name: docker build api
     runs-on: ${{ matrix.runner }}
     permissions:
       packages: write
@@ -71,7 +71,7 @@ jobs:
 
 
   build-images-web_application:
-    name: docker build
+    name: docker build web_application
     runs-on: ${{ matrix.runner }}
     permissions:
       packages: write
