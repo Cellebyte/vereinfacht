@@ -7,24 +7,24 @@ on:
       - main
 jobs:
   build-images:
-    name: API docker build
+    name: docker build
     runs-on: ${{ matrix.runner }}
     permissions:
       packages: write
     strategy:
       matrix:
-        arch: ["amd64"] #, "arm64"]
+        arch: ["amd64", "arm64"]
         include:
           - runner: ubuntu-latest
             arch: "amd64"
-          # - runner: ubuntu-24.04-arm
-          #   arch: "arm64"
+          - runner: ubuntu-24.04-arm
+            arch: "arm64"
     steps:
       - name: downcase REPOSITORY
         run: |
           echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
 
-      - name: Check out code into the Go module directory
+      - name: Check out code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
@@ -37,35 +37,67 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker meta
+      - name: "API: Docker meta"
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REPOSITORY }}/
+          images: ${{ env.REPOSITORY }}/api
           flavor:
             latest=false
 
-      - name: Build and Push Docker Image
+      - name: "API: Build and Push Docker Image"
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./docker/web_application/web_application.Dockerfile
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-          tags: ghcr.io/${{ env.REPOSITORY }}
+          tags: ghcr.io/${{ env.REPOSITORY }}/api
           labels: ${{ steps.meta.outputs.labels }}
-          file: Dockerfile
 
-      - name: Export digest
+      - name: "API: Export digest"
         run: |
-          mkdir -p ${{ runner.temp }}/digests-${{ github.repository_id }}
+          mkdir -p ${{ runner.temp }}/digests-api-${{ github.repository_id }}
           digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests-${{ github.repository_id }}/${digest#sha256:}"
+          touch "${{ runner.temp }}/digests-api-${{ github.repository_id }}/${digest#sha256:}"
 
-      - name: Upload digest
+      - name: "API: Upload digest"
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ github.repository_id }}-${{ matrix.arch }}
-          path: ${{ runner.temp }}/digests-${{ github.repository_id }}/*
+          name: digests-api-${{ github.repository_id }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests-api-${{ github.repository_id }}/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: "WEB_APPLICATON: Docker meta"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REPOSITORY }}/web_application
+          flavor:
+            latest=false
+
+      - name: "WEB_APPLICATON: Build and Push Docker Image"
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/web_application/web_application.Dockerfile
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ghcr.io/${{ env.REPOSITORY }}/web_application
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: "WEB_APPLICATON: Export digest"
+        run: |
+          mkdir -p ${{ runner.temp }}/digests-web_application-${{ github.repository_id }}
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests-web_application-${{ github.repository_id }}/${digest#sha256:}"
+
+      - name: "WEB_APPLICATON: Upload digest"
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-web_application-${{ github.repository_id }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests-web_application-${{ github.repository_id }}/*
           if-no-files-found: error
           retention-days: 1
 
@@ -80,13 +112,6 @@ jobs:
         run: |
           echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
 
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: digests-${{ github.repository_id }}-*
-          merge-multiple: true
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3.0.0
         with:
@@ -94,14 +119,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Metadata (tags, labels) for Docker
+      - name: "API: Download digests"
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests/api
+          pattern: digests-api-${{ github.repository_id }}-*
+          merge-multiple: true
+
+      - name: "API: Extract Metadata (tags, labels) for Docker"
         id: meta
         uses: docker/metadata-action@v5.5.1
         with:
-          images: ghcr.io/${{ env.REPOSITORY }}
+          images: ghcr.io/${{ env.REPOSITORY }}/api
 
-      - name: Create manifest list and push
-        working-directory: ${{ runner.temp }}/digests
+      - name: "API: Create manifest list and push"
+        working-directory: ${{ runner.temp }}/digests/api
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ env.REPOSITORY }}@sha256:%s ' *)
+            $(printf 'ghcr.io/${{ env.REPOSITORY }}/api@sha256:%s ' *)
+
+      - name: "WEB_APPLICATON: Download digests"
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests/web_application
+          pattern: digests-web_application-${{ github.repository_id }}-*
+          merge-multiple: true
+
+      - name: "WEB_APPLICATON: Extract Metadata (tags, labels) for Docker"
+        id: meta
+        uses: docker/metadata-action@v5.5.1
+        with:
+          images: ghcr.io/${{ env.REPOSITORY }}/web_application
+
+      - name: "WEB_APPLICATON: Create manifest list and push"
+        working-directory: ${{ runner.temp }}/digests/web_application
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ env.REPOSITORY }}/web_application@sha256:%s ' *)

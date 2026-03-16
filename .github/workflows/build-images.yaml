@@ -1,0 +1,31 @@
+name: build-images
+on: [pull_request]
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: downcase REPOSITORY
+        run: |
+          echo "REPOSITORY=${GITHUB_REPOSITORY@L}" >> "${GITHUB_ENV}"
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: "API: Build container image"
+        uses: docker/build-push-action@v5
+        with:
+          push: false
+          context: .
+          file: ./docker/api/api.Dockerfile
+          tags: ghcr.io/${{ env.REPOSITORY }}/api:latest-amd64
+
+      - name: "WEB_APPLICATON: Build container image"
+        uses: docker/build-push-action@v5
+        with:
+          push: false
+          context: .
+          file: ./docker/web_application/web_application.Dockerfile
+          tags: ghcr.io/${{ env.REPOSITORY }}/web_application:latest-amd64
