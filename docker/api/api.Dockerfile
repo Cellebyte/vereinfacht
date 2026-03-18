@@ -87,7 +87,7 @@ COPY --chown=${USER_NAME}:${GROUP_NAME} docker/api/entrypoint.sh /var/www/docker
 COPY --chown=${USER_NAME}:${GROUP_NAME} docker/api/startup.sh /var/www/docker/startup.sh
 
 COPY --from=composer/composer:latest-bin /composer /usr/bin/composer
-RUN cd /var/www/html && /usr/bin/composer install && cd / && rm /usr/bin/composer
+RUN cd /var/www/html && /usr/bin/composer install && chown -R ${USER_NAME}:${GROUP_NAME} /var/www/html/vendor && cd / && rm /usr/bin/composer
 
 # Make scripts executeable
 RUN chmod +x /var/www/docker/entrypoint.sh
