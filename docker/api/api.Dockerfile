@@ -1,5 +1,5 @@
 # Define base image
-FROM php:8.3-fpm-alpine3.23
+FROM docker.io/library/php:8.3-fpm-alpine3.23
 
 # Define build arguments
 ARG USER_ID
@@ -45,7 +45,8 @@ RUN apk update && apk add \
     ghostscript \
     autoconf \
     g++ \
-    make
+    make \
+    npm
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo_mysql
@@ -87,7 +88,7 @@ COPY --chown=${USER_NAME}:${GROUP_NAME} docker/api/entrypoint.sh /var/www/docker
 COPY --chown=${USER_NAME}:${GROUP_NAME} docker/api/startup.sh /var/www/docker/startup.sh
 
 COPY --from=composer/composer:latest-bin /composer /usr/bin/composer
-RUN cd /var/www/html && /usr/bin/composer install && chown -R ${USER_NAME}:${GROUP_NAME} /var/www/html/vendor && cd / && rm /usr/bin/composer
+RUN cd /var/www/html && /usr/bin/composer install && npm ci && npm run build && chown -R ${USER_NAME}:${GROUP_NAME} /var/www/html/vendor /var/www/html/public && cd / && rm /usr/bin/composer
 
 # Make scripts executeable
 RUN chmod +x /var/www/docker/entrypoint.sh
