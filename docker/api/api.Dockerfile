@@ -1,5 +1,5 @@
 # Define base image
-FROM docker.io/library/php:8.3-fpm-alpine3.23
+FROM docker.io/library/php:8.4-fpm-alpine3.23
 
 # Define build arguments
 ARG USER_ID
